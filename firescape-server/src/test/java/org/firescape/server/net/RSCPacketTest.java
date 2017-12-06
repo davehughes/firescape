@@ -8,7 +8,9 @@ import org.firescape.server.net.RSCPacket;
 public class RSCPacketTest {
 
     @Test
-    public void test() {
-        // TODO: implement tests here
+    public void testInstantiation() {
+        int packetID = 123;
+        RSCPacket packet = new RSCPacket(null, packetID, new byte[]{});
+        assertEquals(packetID, packet.getID());
     }
 }

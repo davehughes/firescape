@@ -1,3 +1,5 @@
+package org.firescape.server.util;
+
 public class ISAAC {
 
   private final int[] results;

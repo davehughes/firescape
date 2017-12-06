@@ -109,6 +109,7 @@ public class Packet {
    * @return The payload <code>byte</code> array
    */
   public byte[] readBytes(int length) {
+    length = Math.min(length, pLength - caret);
     byte[] data = new byte[length];
     try {
       for (int i = 0; i < length; i++) {
@@ -127,13 +128,7 @@ public class Packet {
    * @return The payload <code>byte</code> array
    */
   public byte[] getRemainingData() {
-    byte[] data = new byte[pLength - caret];
-    for (int i = 0; i < data.length; i++) {
-      data[i] = pData[i + caret];
-    }
-    caret += data.length;
-    return data;
-
+    return readBytes(pLength - caret);
   }
 
   /**

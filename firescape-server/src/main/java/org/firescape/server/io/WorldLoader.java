@@ -18,19 +18,24 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class WorldLoader {
-  private ZipFile tileArchive;
-  // private ZipOutputStream out;
-
   @SuppressWarnings("unchecked")
   public void loadWorld(World world) {
+    loadWorld(world, new File(Config.CONF_DIR, "data/Landscape.rscd"));
+  }
+
+  @SuppressWarnings("unchecked")
+  public void loadWorld(World world, File file) {
+    ZipFile tileArchive;
     try {
-      tileArchive = new ZipFile(new File(Config.CONF_DIR, "data/Landscape.rscd"));
+      tileArchive = new ZipFile(file);
       // out = new ZipOutputStream(new FileOutputStream(new
       // File(Config.CONF_DIR, "data/new_Landscape.rscd")));
       // out.setLevel(9);
     } catch (Exception e) {
       Logger.error(e);
+      return;
     }
+
     for (int lvl = 0; lvl < 4; lvl++) {
       int wildX = 2304;
       int wildY = 1776 - (lvl * 944);
@@ -38,7 +43,7 @@ public class WorldLoader {
         for (int sy = 0; sy < 1000; sy += 48) {
           int x = (sx + wildX) / 48;
           int y = (sy + (lvl * 944) + wildY) / 48;
-          loadSection(x, y, lvl, world, sx, sy + (944 * lvl));
+          loadSection(tileArchive, x, y, lvl, world, sx, sy + (944 * lvl));
         }
       }
     }
@@ -68,7 +73,7 @@ public class WorldLoader {
    * e.printStackTrace(); } return s; }
    */
 
-  private void loadSection(int sectionX, int sectionY, int height, World world, int bigX, int bigY) {
+  private void loadSection(ZipFile tileArchive, int sectionX, int sectionY, int height, World world, int bigX, int bigY) {
     Sector s = null;
     try {
       String filename = "h" + height + "x" + sectionX + "y" + sectionY;

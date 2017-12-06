@@ -9,16 +9,37 @@ import org.firescape.server.net.RSCPacket;
 import org.firescape.server.packetbuilder.RSCPacketBuilder;
 import org.firescape.server.packethandler.PacketHandler;
 import org.firescape.server.util.DataConversions;
+import org.firescape.server.io.PlayerLoader;
+import static org.firescape.server.io.PlayerLoader.LoginState;
 
 public class PlayerLogin implements PacketHandler {
   /**
    * World instance
    */
   public static final World world = World.getWorld();
+  public static final PlayerLoader playerLoader = new PlayerLoader();
+
+  public static final byte LOGIN_CODE_INVALID_LOGIN = 2;
+  public static final byte LOGIN_CODE_ALREADY_LOGGED_IN = 3;
+  public static final byte LOGIN_CODE_CLIENT_VERSION_MISMATCH = 4;
+  public static final byte LOGIN_CODE_SESSION_KEYS_ERROR = 5;
+  public static final byte LOGIN_CODE_BANNED = 6;
+  // public static final byte LOGIN_CODE_BAD_USER_OR_PASSWORD = 7;
+  public static final byte LOGIN_CODE_MAX_USERS_EXCEEDED = 10;
+  public static final byte LOGIN_CODE_UNRECOGNIZED = 22;
+  public static final byte LOGIN_CODE_BAD_USER_OR_PASSWORD = 22;
+
+  private void sendResponsePacket(IoSession session, byte loginCode) {
+    session.write(new RSCPacketBuilder()
+        .setBare(true)
+        .addByte(loginCode)
+        .toPacket()
+        );
+  }
 
   public void handlePacket(Packet p, IoSession session) throws Exception {
     Player player = (Player) session.getAttachment();
-    byte loginCode = 22;
+    byte loginCode = LOGIN_CODE_UNRECOGNIZED;
     try {
       boolean reconnecting = (p.readByte() == 1);
       int clientVersion = p.readShort();
@@ -35,50 +56,51 @@ public class PlayerLogin implements PacketHandler {
       loginPacket.skip(1);
       String password = loginPacket.readString(20).trim();
       loginPacket.skip(1);
+
       if (username.trim().length() < 3 || password.trim().length() < 3) {
-        RSCPacketBuilder pb = new RSCPacketBuilder();
-        pb.setBare(true);
-        pb.addByte(loginCode);
-        session.write(pb.toPacket());
+        sendResponsePacket(session, LOGIN_CODE_BAD_USER_OR_PASSWORD);
         player.destroy(true);
-        loginCode = 7;
         return;
       }
-      int res = org.firescape.server.io.PlayerLoader.getLogin(username, password);
+
+      LoginState loginState = playerLoader.getLogin(username, password);
       if (world.countPlayers() >= org.firescape.server.GameVars.maxUsers) {
-        loginCode = 10;
+        loginCode = LOGIN_CODE_MAX_USERS_EXCEEDED;
       } else if (clientVersion != GameVars.clientVersion) {
-        loginCode = 4;
+        loginCode = LOGIN_CODE_CLIENT_VERSION_MISMATCH;
       } else if (!player.setSessionKeys(sessionKeys)) {
-        loginCode = 5;
+        loginCode = LOGIN_CODE_SESSION_KEYS_ERROR;
         player.bad_login = true;
-      } else if (res == 0) {
-        loginCode = 2; // invalid username/pass.
-      } else if (res == 2) {
-        loginCode = 3;
-      } else if (res == 6) {
-        loginCode = 6;
+      } else if (loginState == LoginState.BAD_PASSWORD) {
+        loginCode = LOGIN_CODE_INVALID_LOGIN;
+      } else if (loginState == LoginState.ALREADY_LOGGED_IN) {
+        loginCode = LOGIN_CODE_ALREADY_LOGGED_IN;
+      } else if (loginState == LoginState.BANNED) {
+        loginCode = LOGIN_CODE_BANNED;
       } else {
-        if (loginCode != 5) {
+        if (loginCode != LOGIN_CODE_SESSION_KEYS_ERROR) {
           player.bad_login = false;
         }
-        if (loginCode != 5 || loginCode != 3) {
+        if (loginCode != LOGIN_CODE_SESSION_KEYS_ERROR || loginCode != LOGIN_CODE_ALREADY_LOGGED_IN) {
           player.load(username, password, uid, reconnecting);
           return;
         }
-
       }
     } catch (Exception e) {
       e.printStackTrace();
-      // loginCode = 7;
+      return;
     }
-    if (loginCode != 22) {
-      RSCPacketBuilder pb = new RSCPacketBuilder();
-      pb.setBare(true);
-      pb.addByte(loginCode);
-      session.write(pb.toPacket());
-      player.destroy(true);
-    }
+
+    sendResponsePacket(session, loginCode);
+    player.destroy(true);
+
+//     if (loginCode != 22) {
+//       RSCPacketBuilder pb = new RSCPacketBuilder();
+//       pb.setBare(true);
+//       pb.addByte(loginCode);
+//       session.write(pb.toPacket());
+//       player.destroy(true);
+//     }
   }
 
 }

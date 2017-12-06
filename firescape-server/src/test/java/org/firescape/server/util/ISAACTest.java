@@ -8,7 +8,8 @@ import org.firescape.server.util.ISAAC;
 public class ISAACTest {
 
     @Test
-    public void test() {
-        // TODO: implement tests here
+    public void testInstantiation() {
+        ISAAC i = new ISAAC(new int[]{1,2,3});
+        i.getNextValue();
     }
 }

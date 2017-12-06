@@ -14,71 +14,91 @@ import java.util.Properties;
  */
 public class PlayerLoader {
 
-  public static JedisPool redis = new JedisPool(new JedisPoolConfig(), "localhost");
+  // TODO: convert this to an enum
+  public static final int LOGIN_STATE_BAD_PASSWORD = 0;
+  public static final int LOGIN_STATE_CORRECT_PASSWORD = 1;
+  public static final int LOGIN_STATE_ALREADY_LOGGED_IN = 2;
+  public static final int LOGIN_STATE_BANNED = 6;
+  public static final int LOGIN_STATE_BAD_USER_OR_PASSWORD = 22;
 
-  static Properties props = new Properties();
-  static Properties baseProps = new Properties();
-
-  public static int getLogin(String user, String pass) {
-    try {
-      // user = user.replaceAll("_", " ");
-      InputStream ios = null;
-      String username = user.replaceAll(" ", "_").toLowerCase();
-      String redis_key = "players_" + username.toLowerCase();
-      try (Jedis jedis = redis.getResource()) {
-        if (jedis.exists(redis_key)) {
-          ios = new ByteArrayInputStream(jedis.get(redis_key).getBytes(StandardCharsets.UTF_8));
-          Logger.print("Loaded players_" + username.toLowerCase() + " from redis.", 3);
-          props.load(ios);
-          if (Integer.valueOf(props.getProperty("rank")) == 6) {
-            ios.close();
-            return 6; // Banned.
-          }
-          if (props.getProperty("pass").equalsIgnoreCase(pass)) {
-            if (props.getProperty("loggedin").equalsIgnoreCase("true")) {
-              ios.close();
-              return 2; // Already logged in.
-            }
-            ios.close();
-            return 1; // Correct, Log in.
-
-          } else { // Bad password
-            ios.close();
-            return 0;
-          }
-        } else {
-          Properties pr = new Properties();
-          pr.load(new FileInputStream(new File("players/Template")));
-          ByteArrayOutputStream bos = new ByteArrayOutputStream();
-          pr.setProperty("pass", pass);
-          pr.store(bos, "Redis backed character data");
-          jedis.set(redis_key, bos.toString());
-          Logger.print("Saved " + redis_key + " data to redis.", 3);
-          // Server.writeValue(user, "pass", pass);
-          Logger.print("Account Created: " + user, 3);
-          return 1;
-        }
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-      org.firescape.server.util.Logger.print(e.toString(), 1);
-      return 0;
-    }
+  public enum LoginState {
+    BAD_PASSWORD,
+    CORRECT_PASSWORD,
+    ALREADY_LOGGED_IN,
+    BANNED,
   }
 
-  static void copy(File src, File dst) {
+  private JedisPool _redisPool;
+
+  public PlayerLoader() {
+    this(new JedisPool(new JedisPoolConfig(), "localhost"));
+  }
+
+  public PlayerLoader(JedisPool redisPool) {
+    _redisPool = redisPool; 
+  }
+
+  public LoginState getLogin(String username, String password) {
     try {
-      InputStream in = new FileInputStream(src);
-      OutputStream out = new FileOutputStream(dst);
-      byte[] buffer = new byte[1024];
-      int len;
-      while ((len = in.read(buffer)) > 0) {
-        out.write(buffer, 0, len);
-      }
-      in.close();
-      out.close();
+        Properties props = loadPlayerProperties(username);
+        if (props == null) {
+            props = createPlayer(username, password);
+        }
+
+        if (Integer.valueOf(props.getProperty("rank")) == LOGIN_STATE_BANNED) {
+          return LOGIN_STATE_BANNED; // Banned.
+        }
+
+        if (props.getProperty("pass").equalsIgnoreCase(password)) {
+          if (props.getProperty("loggedin").equalsIgnoreCase("true")) {
+            return LOGIN_STATE_ALREADY_LOGGED_IN; // Already logged in.
+          }
+          return LOGIN_STATE_CORRECT_PASSWORD; // Correct, Log in.
+        }
     } catch (Exception e) {
-      Logger.print(e, 1);
+      e.printStackTrace();
+      Logger.print(e.toString(), 1);
     }
+
+      // Bad password or other failure to log in
+      return LOGIN_STATE_BAD_PASSWORD;
+  }
+
+  private String redisKeyForUser(String username) {
+      return "players_" + username.replaceAll(" ", "_").toLowerCase();
+  }
+
+  private Properties loadPlayerProperties(String username) throws IOException {
+    Jedis jedis = _redisPool.getResource();
+    String key = redisKeyForUser(username);
+    if (!jedis.exists(key)) {
+        return null;
+    }
+
+    byte[] keyBytes = jedis.get(key).getBytes(StandardCharsets.UTF_8);
+    InputStream ios = new ByteArrayInputStream(keyBytes);
+    Logger.print("Loaded " + key + " from redis.", 3);
+
+    Properties props = new Properties();
+    props.load(ios);
+    ios.close();
+
+    return props;
+  }
+
+  private Properties createPlayer(String username, String password) throws IOException {
+    Jedis jedis = _redisPool.getResource();
+    String key = redisKeyForUser(username);
+    Properties props = new Properties();
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+    props.load(new FileInputStream(new File("players/Template")));
+    props.setProperty("pass", password);
+    props.store(bos, "Redis backed character data");
+    jedis.set(key, bos.toString());
+    Logger.print("Saved " + key + " data to redis.", 3);
+    // Server.writeValue(user, "pass", pass);
+    Logger.print("Account Created: " + username, 3);
+    return props;
   }
 }

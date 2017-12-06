@@ -1,0 +1,37 @@
+<project>
+
+  <modelVersion>4.0.0</modelVersion>
+  <name>Firescape Suite</name>
+
+  <groupId>org.firescape</groupId>
+  <artifactId>firescape-suite</artifactId>
+  <version>1</version>
+  <packaging>pom</packaging>
+
+  <profiles>
+    <profile>
+      <id>server</id>
+      <modules>
+         <module>firescape-server</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>client</id>
+      <modules>
+         <module>firescape-204b</module>
+      </modules>
+    </profile>
+    <profile>
+      <id>all</id>
+      <activation>
+          <activeByDefault>true</activeByDefault>
+      </activation>
+      <modules>
+         <module>firescape-server</module>
+         <!-- <module>firescape-client</module> -->
+         <module>firescape-204b</module>
+      </modules>
+    </profile>
+  </profiles>
+
+</project>
